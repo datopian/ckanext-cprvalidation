@@ -1,7 +1,7 @@
-import ckan.plugins as plugins
-import ckan.plugins.toolkit as toolkit
+import ckan.plugins as p
+import ckan.p.toolkit as tk
 import ckan.lib.helpers as h
-from ckan.plugins.toolkit import Invalid
+from ckan.p.toolkit import Invalid
 from logging import getLogger
 from ckan.logic import get_action
 
@@ -34,24 +34,24 @@ def validate_package(context,pkg_dict):
     try:
         #This will not trigger the next after_update
         get_action('package_update')(context, dataset)
-        log.warn("Changed status of dataset: " + str(dataset['id'] + " to " + str(dataset['verified'])))
+        log.warning("Changed status of dataset: " + str(dataset['id'] + " to " + str(dataset['verified'])))
 
     except Exception as e:
         log.exception(e)
-        log.warn("Something went wrong with the Validation update")
+        log.warning("Something went wrong with the Validation update")
 
 
-class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
-    plugins.implements(plugins.IConfigurer)
-    plugins.implements(plugins.ITemplateHelpers)
-    plugins.implements(plugins.IDatasetForm)
-    plugins.implements(plugins.IRoutes, inherit=True)
+class CprvalidationPlugin(tk.DefaultDatasetForm, p.SingletonPlugin):
+    p.implements(p.IConfigurer)
+    p.implements(p.ITemplateHelpers)
+    p.implements(p.IDatasetForm)
+    p.implements(p.IRoutes, inherit=True)
 
     # IConfigurer
     def update_config(self, config_):
-        toolkit.add_template_directory(config_, 'templates')
-        toolkit.add_public_directory(config_, 'public')
-        toolkit.add_resource('fanstatic', 'cprvalidation')
+        tk.add_template_directory(config_, 'templates')
+        tk.add_public_directory(config_, 'public')
+        tk.add_resource('fanstatic', 'cprvalidation')
 
     # IDatasetForm - expanded schema
     def create_package_schema(self):
@@ -59,8 +59,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).create_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_validator('ignore_missing'),
-                         toolkit.get_converter('convert_to_extras')],
+            'verified': [tk.get_validator('ignore_missing'),
+                        verified_validator,
+                         tk.get_converter('convert_to_extras')],
         })
         return schema
 
@@ -69,8 +70,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).update_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_validator('ignore_missing'),
-                         toolkit.get_converter('convert_to_extras')],
+            'verified': [tk.get_validator('ignore_missing'),
+                         verified_validator,
+                         tk.get_converter('convert_to_extras')],
         })
         return schema
 
@@ -79,8 +81,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).show_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_converter('convert_from_extras'),
-                         toolkit.get_validator('ignore_missing')],
+            'verified': [tk.get_converter('convert_from_extras'),
+                        verified_validator,
+                         tk.get_validator('ignore_missing')],
         })
         return schema
 
