@@ -1,7 +1,7 @@
 import psycopg2
 import logging
 from io import StringIO 
-from ckan.lib.cli import parse_db_config
+# from ckan.lib.cli import parse_db_config
 from ckan.common import config
 
 from flask import Blueprint, Response, abort
@@ -14,9 +14,7 @@ def download():
         port = config.get('ckan.cprvalidation.postgres_port', None)
         password = config.get('ckan.cprvalidation.cprvalidation_password',None)
         db_name = config.get('ckan.cprvalidation.cprvalidation_db',None)
-        db_config = parse_db_config()
-        host = db_config.get('db_host')
-
+        host = 'db'
         if port != None and password != None:
             try:
                 conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=password,

@@ -5,132 +5,159 @@ import os
 import xlrd
 import logging
 import psycopg2
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import datetime
-import layout_scanner
-import json
 from ckan.logic import get_action
-from ckan.lib.cli import CkanCommand, parse_db_config
+# from ckan.lib.cli import parse_db_config
 from ckan.common import config
+from ckan.config.environment import load_environment
 from time import sleep
-from pprint import pprint
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
-from cStringIO import StringIO
+from io import StringIO
 import ckan
 import subprocess
-import pylons
 import requests
-
+import click
 
 log = logging.getLogger(__name__)
 
-class Validation(CkanCommand):
-    '''Performs CPR Validation.
-    Usage:
-        validation initdb
-            Creates the database, must have configured the config with the correct password
+# class Validation(CkanCommand):
+#     '''Performs CPR Validation.
+#     Usage:
+#         validation initdb
+#             Creates the database, must have configured the config with the correct password
 
-        validation scan
-            Scans ckan for new resources and changes and validates them, run this periodically
+#         validation scan
+#             Scans ckan for new resources and changes and validates them, run this periodically
 
-	validation addexception "package_id"
-	    Adds an exception in the database for false positives for alle resources on the given package
-    '''
-    summary = __doc__.split('\n')[0]
-    usage = __doc__
+# 	validation addexception "package_id"
+# 	    Adds an exception in the database for false positives for alle resources on the given package
+#     '''
+#     summary = __doc__.split('\n')[0]
+#     usage = __doc__
 
-    def command(self):
-        self._load_config()
+#     def command(self):
+#         self._load_config()
 
-        if len(self.args) == 0:
-            self.parser.print_usage()
-            sys.exit(1)
-        cmd = self.args[0]
+#         if len(self.args) == 0:
+#             self.parser.print_usage()
+#             sys.exit(1)
+#         cmd = self.args[0]
 
-        if cmd == 'initdb':
-            self.initdb()
-        elif cmd == 'scan':
-            self.scan()
-        elif cmd == 'report':
-            self.report()
-        elif cmd == 'addexception':
-            if(len(self.args) < 2):
-                print("required --id option missing")
-                sys.exit(1)
-            elif(len(self.args) == 2):
-                self.addexception(self.args[1])
-        else:
-            print('Command %s not recognized' % cmd)
-            sys.exit(1)
+#         if cmd == 'initdb':
+#             self.initdb()
+#         elif cmd == 'scan':
+#             self.scan()
+#         elif cmd == 'report':
+#             self.report()
+#         elif cmd == 'addexception':
+#             if(len(self.args) < 2):
+#                 print("required --id option missing")
+#                 sys.exit(1)
+#             elif(len(self.args) == 2):
+#                 self.addexception(self.args[1])
+#         else:
+#             print(('Command %s not recognized' % cmd))
+#             sys.exit(1)
 
-    def addexception(self, id):
-        # Adds an exception to the database.
-        # Sometimes resources will contain valid CPR-numbers which are in fact not
-        d_port = config.get('ckan.cprvalidation.postgres_port', None)
-        d_pass = config.get('ckan.cprvalidation.cprvalidation_password', None)
-        db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
+#     def addexception(self, id):
+#         # Adds an exception to the database.
+#         # Sometimes resources will contain valid CPR-numbers which are in fact not
+#         d_port = config.get('ckan.cprvalidation.postgres_port', None)
+#         d_pass = config.get('ckan.cprvalidation.cprvalidation_password', None)
+#         db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
 
-        add_exception = ''' UPDATE {0}.status SET excepted = TRUE
-                            WHERE package_id = %s
-                            returning *
-        ;'''
+#         add_exception = ''' UPDATE {0}.status SET excepted = TRUE
+#                             WHERE package_id = %s
+#                             returning *
+#         ;'''
 
-        if d_pass == None:
-            print("Setup cprvalidation_password in /etc/ckan/default/production.ini")
-            sys.exit(1)
-        if d_port == None:
-            print("Setup postgres_port in /etc/ckan/default/production.ini")
-            sys.exit(1)
+#         if d_pass == None:
+#             print("Setup cprvalidation_password in /etc/ckan/default/production.ini")
+#             sys.exit(1)
+#         if d_port == None:
+#             print("Setup postgres_port in /etc/ckan/default/production.ini")
+#             sys.exit(1)
 
-        try:
-            db_config = parse_db_config()
-            host = db_config.get('db_host')
-            conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
-                                    port=d_port)
-            conn.autocommit = True
-            print(" ")
-        except Exception as e:
-            print(e)
-            sys.exit()
+#         try:
+#             # db_config = parse_db_config()
+#             host = 'db'
+#             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
+#                                     port=d_port)
+#             conn.autocommit = True
+#             print(" ")
+#         except Exception as e:
+#             print(e)
+#             sys.exit()
 
-        cur = conn.cursor()
-        cur.execute(add_exception.format(db_name), (id,))
+#         cur = conn.cursor()
+#         cur.execute(add_exception.format(db_name), (id,))
 
-        count = len(cur.fetchall())
-        if(count == 0):
-            print("Could not find relation %s " % id)
-        else:
-            print("Added exception for %d resources in dataset with package_id: %s " % (count,id))
+#         count = len(cur.fetchall())
+#         if(count == 0):
+#             print(("Could not find relation %s " % id))
+#         else:
+#             print(("Added exception for %d resources in dataset with package_id: %s " % (count,id)))
 
-        conn.commit()
-        conn.close()
+#         conn.commit()
+#         conn.close()
 
-    def initdb(self):
-        #For debugging purposes we delete the database everytime we init. This CLEANS the database
+
+#     def scan(self):
+#         resource_list = getAllResources()  # list of all resources in CKAN
+#         print(("%d resources in catalog \n" % len(resource_list)))
+
+#         # Update the database with new resources and / or packages
+#         updateSchema(resource_list)
+
+#         # Fetch the resources that needs to be scanned
+#         resources_to_check = scanDB()
+#         count = 0
+
+#         if(len(resources_to_check) == 0):
+#             print("No updates, no resources to scan")
+#             return
+
+#         for r in resources_to_check:
+#             validateResource(r)
+#             count+= 1
+
+#         print(("Scanned %d resources for CPR numbers" % count))
+
+# # # #
+# Click commands
+@click.command(name='cpr-initdb')
+def initdb():
+        click.secho("come into cpr init db", fg='green')
+        click.secho(config, fg='blue')
+
+        # For debugging purposes we delete the database everytime we init. This CLEANS the database
         d_port = config.get('ckan.cprvalidation.postgres_port', None)
         d_pass = config.get('ckan.cprvalidation.cprvalidation_password', None)
         db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
         postgres_pass = config.get('ckan.cprvalidation.postgres_password', None)
+
         error_state = False
         if d_pass == None:
-            print("Setup cprvalidation_password in /etc/ckan/default/production.ini")
+            click.echo("Setup cprvalidation_password in /etc/ckan/default/production.ini")
             error_state = True
         if d_port == None:
-            print("Setup postgres_port in /etc/ckan/default/production.ini")
+            click.echo("Setup postgres_port in /etc/ckan/default/production.ini")
             error_state = True
         if postgres_pass == None:
-            print("Setup postgres_password in /etc/ckan/default/production.ini")
+            click.echo("Setup postgres_password in /etc/ckan/default/production.ini")
             error_state = True
 
         if(error_state):
-            print("Exiting..")
+            click.secho("Exiting..", fg='red')
             sys.exit(1)
 
         create_user = '''
-                    CREATE ROLE cprvalidation WITH PASSWORD %s;
+                    DROP ROLE IF EXISTS cprvalidation;
+                    CREATE ROLE cprvalidation WITH PASSWORD %s LOGIN;
                 '''
         drop_db = '''DROP DATABASE IF EXISTS {0};'''
         create_db = '''
@@ -175,82 +202,63 @@ class Validation(CkanCommand):
         '''
 
         try:
-            db_config = parse_db_config()
-            host = db_config.get('db_host')
+            # db_config = parse_db_config()
+            host = 'db'
             conn = psycopg2.connect(database="postgres", host=host, user="postgres", password=postgres_pass,
                                     port=d_port)
             conn.autocommit = True
-            print("Connected as postgres user.")
+            click.echo("Connected as postgres user.")
         except Exception as e:
-            print(e)
+            click.echo(e)
             sys.exit()
 
         cur = conn.cursor()
         try:
-            #cur.execute(create_user,[d_pass])
             cur.execute(drop_db.format(db_name))
+            cur.execute(create_user,[d_pass])
             cur.execute(create_db.format(db_name))
-            print("Initialized Database")
+            click.echo("Initialized Database")
             conn.commit()
             conn.close()
         except Exception as e:
             #TODO: Handle this sort of erros more gracefully
-            print("Unexpected error")
-            print(e.message)
+            click.echo("Unexpected error")
+            click.echo((e.message))
             sys.exit(1)
 
         #
         # We need two different sessions to the database as we are changing user
         #
         try:
-            db_config = parse_db_config()
-            host = db_config.get('db_host')
+            # db_config = parse_db_config()
+            # host = db_config.get('db_host')
+            host = 'db'
             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation",
                                         password=d_pass,
                                         port=d_port)
             conn.autocommit = True
 
-            print("Created the table and scheme")
+            click.secho("Created the table and scheme", fg='green')
         except Exception as e:
-            print("Woops")
-            print(e)
+            click.secho("Woops", fg='red')
+            click.secho(e, fg='red')
             sys.exit()
 
         cur = conn.cursor()
         try:
             cur.execute(create_schema.format(db_name))
             cur.execute(create_table.format(db_name))
-            print("Created schema and table")
+            click.echo("Created schema and table")
             conn.commit()
             conn.close()
-            print("Done.")
+            click.echo("Done.")
         except:
             # TODO: Handle this sort of erros more gracefully
-            print("Unexpected error")
+            click.echo("Unexpected error")
             sys.exit(1)
 
 
-    def scan(self):
-        resource_list = getAllResources()  # list of all resources in CKAN
-        print("%d resources in catalog \n" % len(resource_list))
-
-        # Update the database with new resources and / or packages
-        updateSchema(resource_list)
-
-        # Fetch the resources that needs to be scanned
-        resources_to_check = scanDB()
-        count = 0
-
-        if(len(resources_to_check) == 0):
-            print("No updates, no resources to scan")
-            return
-
-        for r in resources_to_check:
-            validateResource(r)
-            count+= 1
-
-        print("Scanned %d resources for CPR numbers" % count)
-
+# # # #
 # # # #
 # Helper Functions
 # # # #
@@ -258,7 +266,7 @@ def processCSV(file_path, file_url, local):
     error = None
     file_string = None
     # We'll use the package_create function to create a new dataset.
-    request = urllib2.Request(
+    request = urllib.request.Request(
         'http://www.my_ckan_site.com/api/action/package_create')
 
     # Creating a dataset requires an authorization header.
@@ -273,12 +281,12 @@ def processCSV(file_path, file_url, local):
             file_string = f.read().replace(',', ' ')
     else:
         try:
-            request = urllib2.Request(file_url)
+            request = urllib.request.Request(file_url)
 
             request.add_header("Authorization", api)
-            response = urllib2.urlopen(request)
+            response = urllib.request.urlopen(request)
             file_string = response.read().replace(',',' ')
-        except urllib2.HTTPError as e:
+        except urllib.error.HTTPError as e:
             if e.code == 404:
                 error = "404 file was not found"
             elif e.code == 500:
@@ -287,12 +295,12 @@ def processCSV(file_path, file_url, local):
                     for i in range(5):
                         try:
                             # We'll use the package_create function to create a new dataset.
-                            request = urllib2.Request(file_url)
+                            request = urllib.request.Request(file_url)
 
                             request.add_header("Authorization", api)
-                            response = urllib2.urlopen(request)
+                            response = urllib.request.urlopen(request)
                             file_string = response.read().replace(',', ' ')
-                        except urllib2.HTTPError as e:
+                        except urllib.error.HTTPError as e:
                             retrycount += 1
                             print("Retrying...")
                         sleep(5)
@@ -327,7 +335,7 @@ def processXLSX(file_url):
     #Parses all sheets by default
     data = []
     try:
-        socket = urllib2.urlopen(file_url)
+        socket = urllib.request.urlopen(file_url)
         #this line gets me the excel workbook
         xlfile = xlrd.open_workbook(file_contents = socket.read())
         sh1 = xlfile.sheet_by_index(0)
@@ -392,7 +400,7 @@ def processODS(file_path):
     '''Uses Pyexcel-ods to load the data as an OrderedDict, reads all sheets by default'''
     try:
         data = get_data(file_path)
-        file_string = ' '.join([k + str(v) for k, v in data.items()])
+        file_string = ' '.join([k + str(v) for k, v in list(data.items())])
     except Exception as e:
         error = e.message
 
@@ -434,9 +442,9 @@ def validateResource(resource):
     error = False
 
     print("DEBUG INFO: ")
-    print("Resource: " + str(resource))
-    print("Datastore: " + str(datastore))
-    print("Filestore: " + str(filestore))
+    print(("Resource: " + str(resource)))
+    print(("Datastore: " + str(datastore)))
+    print(("Filestore: " + str(filestore)))
 
     storage_path = config.get('ckan.storage_path')
 
@@ -449,8 +457,8 @@ def validateResource(resource):
         file_path = siteurl + "/datastore/dump/" + id + "?format=csv"
         format = "csv" #Datastore will always be CSV, so this makes it easier
 
-    print("Format: " + str(format))
-    print("File_path: " + str(file_path))
+    print(("Format: " + str(format)))
+    print(("File_path: " + str(file_path)))
 
     if file_path is None:
         print("Could not construct file_path")
@@ -475,7 +483,7 @@ def validateResource(resource):
     elif format == "geojson" or format == "json":
         output = processJSON(file_url)
     else:
-        print("Format %s can't be processed" % format)
+        print(("Format %s can't be processed" % format))
         return
 
     error = output[0]
@@ -491,8 +499,9 @@ def validateResource(resource):
     if(insert_error):
         print(error)
         try:
-            db_config = parse_db_config()
-            host = db_config.get('db_host')
+            # db_config = parse_db_config()
+            # host = db_config.get('db_host')
+            host = 'db'
             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
                                     port=d_port)
         except Exception as e:
@@ -513,8 +522,9 @@ def validateResource(resource):
     else:
         if(not iscpr[0]): #If we dont have a CPR in the resource
             try:
-                db_config = parse_db_config()
-                host = db_config.get('db_host')
+                # db_config = parse_db_config()
+                # host = db_config.get('db_host')
+                host = 'db'
                 conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
             except Exception as e:
                 print(e)
@@ -536,8 +546,9 @@ def validateResource(resource):
             print("Detected a CPR number, if an exception is made nothing will happen")
 
             try:
-                db_config = parse_db_config()
-                host = db_config.get('db_host')
+                # db_config = parse_db_config()
+                # host = db_config.get('db_host')
+                host = 'db'
                 conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
             except Exception as e:
                 print(e)
@@ -558,7 +569,7 @@ def validateResource(resource):
             cur = conn.cursor()
             cur.execute(select.format(db_name),[resource[0]])
             if(len(cur.fetchall()) > 0 ): #There was an exception made for this resource
-                print("Exception was made for package with id: %s ignoring." % resource[0])
+                print(("Exception was made for package with id: %s ignoring." % resource[0]))
                 return
 
             cur.execute(insert.format(db_name), [current_time,iscpr[1],id])
@@ -571,35 +582,32 @@ def validateResource(resource):
                 package = get_action('package_show')({},{'id': package_id})
             except Exception as e:
                 print("Could not show package")
-                print(e.message)
+                print((e.message))
                 sys.exit(1)
             try:
-		if(package["private"] == True): #If the dataset is already private, we do not need to send an email otherwise we spam
-		    return
+                if(package["private"] == True): #If the dataset is already private, we do not need to send an email otherwise we spam
+                    return
                 package["private"] = True
                 get_action('package_update')({},package)
-                print("Made dataset with package id: " + package_id + " private as it contains CPR data. Either add an exception or remove it from the site")
+                print(("Made dataset with package id: " + package_id + " private as it contains CPR data. Either add an exception or remove it from the site"))
                 print("When an exception has been made or data altered, kindly mark data as public again")
 
                 recipient = config.get('ckan.cprvalidation.email', None)
                 subject = "CPR fundet i datasæt: %s" % resource[0]
                 body = "CPR data er fundet i datasættet med id: %s specifikt resourcen med id: %s \n Data er gjort privat, tjek data igennem og " \
-                       "publicer igen eller tilføj en exception hvis du mener data ikke indeholder CPR og kan stå" \
-                       " inde for dette." % (resource[0],id)
+                            "publicer igen eller tilføj en exception hvis du mener data ikke indeholder CPR og kan stå" \
+                            " inde for dette." % (resource[0],id)
                 try:
                     process = subprocess.Popen(['mail', '-s', subject,'-r',"teknik@opendata.dk", recipient],
-                                                   stdin=subprocess.PIPE)
-                except Exception, error:
-                    print error
+                                                        stdin=subprocess.PIPE)
+                except Exception as error:
+                    print(error)
                 process.communicate(body)
 
             except Exception as e:
                 print("Could not update package")
-                print(e.message)
+                print((e.message))
                 sys.exit(1)
-
-
-
 
 def scanDB():
     d_port = config.get('ckan.cprvalidation.postgres_port', None)
@@ -607,8 +615,9 @@ def scanDB():
     db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
 
     try:
-        db_config = parse_db_config()
-        host = db_config.get('db_host')
+        # db_config = parse_db_config()
+        # host = db_config.get('db_host')
+        host = 'db'
         conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
                                 port=d_port)
     except Exception as e:
@@ -632,7 +641,7 @@ def scanDB():
     conn.close()
 
     # Return them
-    print("Found %d updated resources to validate \n" % len(tmp_return))
+    print(("Found %d updated resources to validate \n" % len(tmp_return)))
     return tmp_return
 
 def updateSchema(resources):
@@ -642,8 +651,9 @@ def updateSchema(resources):
     db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
 
     try:
-        db_config = parse_db_config()
-        host = db_config.get('db_host')
+        # db_config = parse_db_config()
+        # host = db_config.get('db_host')
+        host = 'db'
         conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
     except Exception as e:
         print(e)
@@ -652,7 +662,7 @@ def updateSchema(resources):
     # Fetch all resources from the database
     print("Looking for new resources..")
     cur = conn.cursor()
-    print db_name
+    print(db_name)
     cur.execute("""SELECT resource_id, last_updated FROM {0}.status;
         """.format(db_name))
     database_resources = cur.fetchall()
@@ -704,7 +714,7 @@ def updateSchema(resources):
              )
         u = dict["metadata_modified"]
         cur.execute(insert.format(db_name), (i,u))
-    print("Inserted %d new resources to the database \n" % count)
+    print(("Inserted %d new resources to the database \n" % count))
 
     # # #
     # Update the information for last_updated
@@ -719,14 +729,13 @@ def updateSchema(resources):
             try:
                 cur.execute(update.format(db_name), (i, dict["id"]))
             except Exception as e:
-                print(e.message)
-    print("Updated %d new resources to the database \n" % count)
+                print((e.message))
+    print(("Updated %d new resources to the database \n" % count))
     try:
         conn.commit()
         conn.close()
     except Exception as e:
-        print(e.message)
-
+        print((e.message))
 
 def getAllResources():
     #We don't check private resources.
@@ -744,7 +753,7 @@ def getAllResources():
             resources.append(resource)
 
     if dates:
-        print(sorted(dates,reverse=True)[0])
+        print((sorted(dates,reverse=True)[0]))
 
     return resources
 
@@ -765,7 +774,6 @@ def findall(lst,key,value):
         return found
     else:
         return []
-
 
 def validcpr(file_string):
     monthList = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]

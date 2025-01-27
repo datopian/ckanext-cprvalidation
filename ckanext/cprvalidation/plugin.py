@@ -4,6 +4,7 @@ from ckan.plugins.toolkit import Invalid
 from logging import getLogger
 from ckan.logic import get_action
 from ckanext.cprvalidation.views import cpr
+from ckanext.cprvalidation.validation import initdb 
 
 log = getLogger(__name__)
 
@@ -42,9 +43,9 @@ def validate_package(context,pkg_dict):
 
 class CprvalidationPlugin(tk.DefaultDatasetForm, p.SingletonPlugin):
     p.implements(p.IConfigurer)
-    p.implements(p.ITemplateHelpers)
     p.implements(p.IDatasetForm)
     p.implements(p.IBlueprint)
+    p.implements(p.IClick)
 
     # IConfigurer
     def update_config(self, config_):
@@ -92,13 +93,8 @@ class CprvalidationPlugin(tk.DefaultDatasetForm, p.SingletonPlugin):
     def package_types(self):
         return []
 
-    def get_helpers(self):
-        return []
-
     def get_blueprint(self):
         return [cpr]
-    # '''IRoutes Adds download button to the admin page'''
-    # def before_map(self,map):
-    #     cpr_ctrl = 'ckanext.cprvalidation.cpr:CprExportController'
-    #     map.connect('download cpr report','/download/cprreport',controller=cpr_ctrl,action='download')
-    #     return map
+    
+    def get_commands(self):
+        return [initdb]
