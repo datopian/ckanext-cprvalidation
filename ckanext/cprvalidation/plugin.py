@@ -4,7 +4,7 @@ from ckan.plugins.toolkit import Invalid
 from logging import getLogger
 from ckan.logic import get_action
 from ckanext.cprvalidation.views import cpr
-from ckanext.cprvalidation.validation import initdb 
+from ckanext.cprvalidation.validation import initdb, scan, addexception
 
 log = getLogger(__name__)
 
@@ -97,4 +97,5 @@ class CprvalidationPlugin(tk.DefaultDatasetForm, p.SingletonPlugin):
         return [cpr]
     
     def get_commands(self):
-        return [initdb]
+        return [initdb, scan, addexception]
+    

@@ -24,116 +24,32 @@ import click
 
 log = logging.getLogger(__name__)
 
-# class Validation(CkanCommand):
-#     '''Performs CPR Validation.
-#     Usage:
-#         validation initdb
-#             Creates the database, must have configured the config with the correct password
-
-#         validation scan
-#             Scans ckan for new resources and changes and validates them, run this periodically
-
-# 	validation addexception "package_id"
-# 	    Adds an exception in the database for false positives for alle resources on the given package
-#     '''
-#     summary = __doc__.split('\n')[0]
-#     usage = __doc__
-
-#     def command(self):
-#         self._load_config()
-
-#         if len(self.args) == 0:
-#             self.parser.print_usage()
-#             sys.exit(1)
-#         cmd = self.args[0]
-
-#         if cmd == 'initdb':
-#             self.initdb()
-#         elif cmd == 'scan':
-#             self.scan()
-#         elif cmd == 'report':
-#             self.report()
-#         elif cmd == 'addexception':
-#             if(len(self.args) < 2):
-#                 print("required --id option missing")
-#                 sys.exit(1)
-#             elif(len(self.args) == 2):
-#                 self.addexception(self.args[1])
-#         else:
-#             print(('Command %s not recognized' % cmd))
-#             sys.exit(1)
-
-#     def addexception(self, id):
-#         # Adds an exception to the database.
-#         # Sometimes resources will contain valid CPR-numbers which are in fact not
-#         d_port = config.get('ckan.cprvalidation.postgres_port', None)
-#         d_pass = config.get('ckan.cprvalidation.cprvalidation_password', None)
-#         db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
-
-#         add_exception = ''' UPDATE {0}.status SET excepted = TRUE
-#                             WHERE package_id = %s
-#                             returning *
-#         ;'''
-
-#         if d_pass == None:
-#             print("Setup cprvalidation_password in /etc/ckan/default/production.ini")
-#             sys.exit(1)
-#         if d_port == None:
-#             print("Setup postgres_port in /etc/ckan/default/production.ini")
-#             sys.exit(1)
-
-#         try:
-#             # db_config = parse_db_config()
-#             host = 'db'
-#             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
-#                                     port=d_port)
-#             conn.autocommit = True
-#             print(" ")
-#         except Exception as e:
-#             print(e)
-#             sys.exit()
-
-#         cur = conn.cursor()
-#         cur.execute(add_exception.format(db_name), (id,))
-
-#         count = len(cur.fetchall())
-#         if(count == 0):
-#             print(("Could not find relation %s " % id))
-#         else:
-#             print(("Added exception for %d resources in dataset with package_id: %s " % (count,id)))
-
-#         conn.commit()
-#         conn.close()
-
-
-#     def scan(self):
-#         resource_list = getAllResources()  # list of all resources in CKAN
-#         print(("%d resources in catalog \n" % len(resource_list)))
-
-#         # Update the database with new resources and / or packages
-#         updateSchema(resource_list)
-
-#         # Fetch the resources that needs to be scanned
-#         resources_to_check = scanDB()
-#         count = 0
-
-#         if(len(resources_to_check) == 0):
-#             print("No updates, no resources to scan")
-#             return
-
-#         for r in resources_to_check:
-#             validateResource(r)
-#             count+= 1
-
-#         print(("Scanned %d resources for CPR numbers" % count))
-
 # # # #
 # Click commands
+@click.command(name='cpr-scan')
+def scan():
+    resource_list = getAllResources()  # list of all resources in CKAN
+    click.echo("%d resources in catalog \n" % len(resource_list))
+
+    # Update the database with new resources and / or packages
+    updateSchema(resource_list)
+
+    # Fetch the resources that needs to be scanned
+    resources_to_check = scanDB()
+    count = 0
+
+    if(len(resources_to_check) == 0):
+        click.secho("No updates, no resources to scan", fg='yellow')
+        return
+
+    for r in resources_to_check:
+        validateResource(r)
+        count+= 1
+
+    click.echo(("Scanned %d resources for CPR numbers" % count))
+
 @click.command(name='cpr-initdb')
 def initdb():
-        click.secho("come into cpr init db", fg='green')
-        click.secho(config, fg='blue')
-
         # For debugging purposes we delete the database everytime we init. This CLEANS the database
         d_port = config.get('ckan.cprvalidation.postgres_port', None)
         d_pass = config.get('ckan.cprvalidation.cprvalidation_password', None)
@@ -248,14 +164,68 @@ def initdb():
         try:
             cur.execute(create_schema.format(db_name))
             cur.execute(create_table.format(db_name))
-            click.echo("Created schema and table")
+            click.secho("Created schema and table", fg='green')
             conn.commit()
             conn.close()
-            click.echo("Done.")
+            click.secho("Done.", fg='green')
         except:
             # TODO: Handle this sort of erros more gracefully
             click.echo("Unexpected error")
             sys.exit(1)
+
+@click.command(name='cpr-addexception')
+@click.option('--id', required=True, help='id to recongize relation')
+def addexception(id):
+    # Adds an exception to the database.
+    # Sometimes resources will contain valid CPR-numbers which are in fact not
+    d_port = config.get("ckan.cprvalidation.postgres_port", None)
+    d_pass = config.get("ckan.cprvalidation.cprvalidation_password", None)
+    db_name = config.get("ckan.cprvalidation.cprvalidation_db", None)
+
+    add_exception = """ UPDATE {0}.status SET excepted = TRUE
+                            WHERE package_id = %s
+                            returning *
+        ;"""
+
+    if d_pass == None:
+        print("Setup cprvalidation_password in /etc/ckan/default/production.ini")
+        sys.exit(1)
+    if d_port == None:
+        print("Setup postgres_port in /etc/ckan/default/production.ini")
+        sys.exit(1)
+
+    try:
+        # db_config = parse_db_config()
+        host = "db"
+        conn = psycopg2.connect(
+            database=db_name,
+            host=host,
+            user="cprvalidation",
+            password=d_pass,
+            port=d_port,
+        )
+        conn.autocommit = True
+        print(" ")
+    except Exception as e:
+        print(e)
+        sys.exit()
+
+    cur = conn.cursor()
+    cur.execute(add_exception.format(db_name), (id,))
+
+    count = len(cur.fetchall())
+    if count == 0:
+        print(("Could not find relation %s " % id))
+    else:
+        print(
+            (
+                "Added exception for %d resources in dataset with package_id: %s "
+                % (count, id)
+            )
+        )
+
+    conn.commit()
+    conn.close()
 
 
 # # # #
@@ -273,6 +243,8 @@ def processCSV(file_path, file_url, local):
     # Replace *** with your API key, from your user account on the CKAN site
     # that you're creating the dataset on.
     api = config.get('ckan.cprvalidation.api', None)
+
+    # /var/lib/ckan/resources/757/465/8b-e8da-4de1-a7ce-7046cf1217aa'
 
     retrycount = 0
     #TODO: This is probably not the best way to handle a CSV file..
@@ -499,8 +471,6 @@ def validateResource(resource):
     if(insert_error):
         print(error)
         try:
-            # db_config = parse_db_config()
-            # host = db_config.get('db_host')
             host = 'db'
             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
                                     port=d_port)
