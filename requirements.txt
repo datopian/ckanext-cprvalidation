@@ -1,3 +1,4 @@
 xlrd
 python-docx
-pdfminer==20131113
+pdfminer
+pyexcel_ods

@@ -6,6 +6,9 @@ import xlrd
 import logging
 import psycopg2
 import json
+import docx
+from pyexcel_ods import get_data
+from docx import Document
 import urllib.request, urllib.error, urllib.parse
 import datetime
 from ckan.logic import get_action
@@ -289,15 +292,18 @@ def processCSV(file_path, file_url, local):
 def processDOCX(file_path):
     error = None
     file_string = None
+    print("docx is being processed")
     try:
         doc = Document(file_path)
+        print('this is', doc)
         fullText = []
         for para in doc.paragraphs:
             fullText.append(para.text)
         file_string = '\n'.join(fullText)
     except Exception as e:
-        error = e.message
+        error = str(e)
 
+    print("docx is finished processed")
     return [error,file_string]
 
 def processXLSX(file_url):
@@ -307,6 +313,8 @@ def processXLSX(file_url):
     #Simple but it works
     #Parses all sheets by default
     data = []
+    print("xls is being processed")
+
     try:
         socket = urllib.request.urlopen(file_url)
         #this line gets me the excel workbook
@@ -314,8 +322,12 @@ def processXLSX(file_url):
         sh1 = xlfile.sheet_by_index(0)
         for rownum in range(sh1.nrows): # sh1.nrows -> number of rows (ncols -> num columns)
             data.append(' '.join(sh1.row_values(rownum)))
+    except xlrd.XLRDError as e:
+        error = str(e)
     except Exception as e:
         error = e.message
+
+    print("xls is finished processed")
 
     return [error, '\n'.join(data)]
 
@@ -376,14 +388,16 @@ def processJSON(file_url):
 
 def processODS(file_path):
     error = None
+    print('ods is being processed')
     file_string = None
     '''Uses Pyexcel-ods to load the data as an OrderedDict, reads all sheets by default'''
     try:
         data = get_data(file_path)
         file_string = ' '.join([k + str(v) for k, v in list(data.items())])
     except Exception as e:
-        error = e.message
+        error = str(e)
 
+    print('ods is finished processed')
     return [error,file_string]
 
 def validateResource(resource):
