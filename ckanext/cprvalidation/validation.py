@@ -294,12 +294,19 @@ def processDOCX(file_path):
     file_string = None
     print("docx is being processed")
     try:
-        doc = Document(file_path)
-        print('this is', doc)
+        # Download the file since it is url and Document expects local file path
+        local_filename = file_path.split("/")[-1]
+        response = requests.get(file_path)
+        if response.status_code == 200:
+            with open(local_filename, "wb") as f:
+                f.write(response.content)
+        
+        doc = Document(local_filename)
         fullText = []
         for para in doc.paragraphs:
             fullText.append(para.text)
         file_string = '\n'.join(fullText)
+        os.remove(local_filename)
     except Exception as e:
         error = str(e)
 
@@ -392,8 +399,16 @@ def processODS(file_path):
     file_string = None
     '''Uses Pyexcel-ods to load the data as an OrderedDict, reads all sheets by default'''
     try:
-        data = get_data(file_path)
+        local_filename = file_path.split("/")[-1]
+        response = requests.get(file_path)
+        if response.status_code == 200:
+            with open(local_filename, "wb") as f:
+                f.write(response.content)
+        
+
+        data = get_data(local_filename)
         file_string = ' '.join([k + str(v) for k, v in list(data.items())])
+        os.remove(local_filename)
     except Exception as e:
         error = str(e)
 
