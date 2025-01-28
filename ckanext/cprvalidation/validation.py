@@ -5,6 +5,7 @@ import os
 import xlrd
 import logging
 import psycopg2
+import json
 import urllib.request, urllib.error, urllib.parse
 import datetime
 from ckan.logic import get_action
@@ -322,6 +323,7 @@ def processPDF(file_path):
     #TODO: This method is generally too slow to be useful. Needs a rewrite (Add PDF as an allowed format in the SQL
     #TODO: query when done)
 
+    print("pdf file is being processed")
     error = None
     file_string = None
     try:
@@ -352,16 +354,22 @@ def processPDF(file_path):
         error = e.message
 
 
+    print("pdf file is finished processed")
+
     return [error,file_string]
 
 def processJSON(file_url):
     error = None
     file_string = None
+    print("json file is being processed")
+
     try:
         resp = requests.get(file_url)
         data = resp.json()
         file_string = str(data)
-    except Exception as e:
+    except json.JSONDecodeError as e: # JSONDecodeError uses msg instead of message
+        error = e.msg  
+    except Exception as e: 
         error = e.message
 
     return [error,file_string]
