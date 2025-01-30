@@ -122,8 +122,7 @@ def initdb():
         '''
 
         try:
-            # db_config = parse_db_config()
-            host = 'db'
+            host = config.get('POSTGRES_HOST', 'db')
             conn = psycopg2.connect(database="postgres", host=host, user="postgres", password=postgres_pass,
                                     port=d_port)
             conn.autocommit = True
@@ -150,9 +149,7 @@ def initdb():
         # We need two different sessions to the database as we are changing user
         #
         try:
-            # db_config = parse_db_config()
-            # host = db_config.get('db_host')
-            host = 'db'
+            host = config.get('POSTGRES_HOST', 'db')
             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation",
                                         password=d_pass,
                                         port=d_port)
@@ -508,7 +505,7 @@ def validateResource(resource):
     if(insert_error):
         print(error)
         try:
-            host = 'db'
+            host = config.get('POSTGRES_HOST', 'db')
             conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
                                     port=d_port)
         except Exception as e:
@@ -529,9 +526,7 @@ def validateResource(resource):
     else:
         if(not iscpr[0]): #If we dont have a CPR in the resource
             try:
-                # db_config = parse_db_config()
-                # host = db_config.get('db_host')
-                host = 'db'
+                host = config.get('POSTGRES_HOST', 'db')
                 conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
             except Exception as e:
                 print(e)
@@ -553,9 +548,7 @@ def validateResource(resource):
             print("Detected a CPR number, if an exception is made nothing will happen")
 
             try:
-                # db_config = parse_db_config()
-                # host = db_config.get('db_host')
-                host = 'db'
+                host = config.get('POSTGRES_HOST', 'db')
                 conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
             except Exception as e:
                 print(e)
@@ -622,9 +615,7 @@ def scanDB():
     db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
 
     try:
-        # db_config = parse_db_config()
-        # host = db_config.get('db_host')
-        host = 'db'
+        host = config.get('POSTGRES_HOST', 'db')
         conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=d_pass,
                                 port=d_port)
     except Exception as e:
@@ -658,9 +649,7 @@ def updateSchema(resources):
     db_name = config.get('ckan.cprvalidation.cprvalidation_db', None)
 
     try:
-        # db_config = parse_db_config()
-        # host = db_config.get('db_host')
-        host = 'db'
+        host = config.get('POSTGRES_HOST', 'db')
         conn = psycopg2.connect(database=db_name,host=host, user="cprvalidation",password=d_pass,port=d_port)
     except Exception as e:
         print(e)

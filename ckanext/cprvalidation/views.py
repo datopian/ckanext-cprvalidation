@@ -14,7 +14,7 @@ def download():
         port = config.get('ckan.cprvalidation.postgres_port', None)
         password = config.get('ckan.cprvalidation.cprvalidation_password',None)
         db_name = config.get('ckan.cprvalidation.cprvalidation_db',None)
-        host = 'db'
+        host = config.get('POSTGRES_HOST', 'db')
         if port != None and password != None:
             try:
                 conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=password,
