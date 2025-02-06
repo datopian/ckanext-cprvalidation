@@ -1,4 +1,5 @@
 xlrd
+pandas
 python-docx
 pdfminer
 pyexcel_ods
