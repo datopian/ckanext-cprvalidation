@@ -1,42 +1,37 @@
-import os
 import psycopg2
-import sys
 import logging
-import pylons
-import StringIO
-from ckan.logic import get_action
-from ckan.controllers.admin import AdminController
-from ckan.lib.cli import parse_db_config
-
+from io import StringIO 
+# from ckan.lib.cli import parse_db_config
 from ckan.common import config
+
+from flask import Blueprint, Response, abort
 
 log = logging.getLogger(__name__)
 
-class CprExportController(AdminController):
+cpr = Blueprint("cpr", __name__)
 
-    def download(self):
+def download():
         port = config.get('ckan.cprvalidation.postgres_port', None)
         password = config.get('ckan.cprvalidation.cprvalidation_password',None)
         db_name = config.get('ckan.cprvalidation.cprvalidation_db',None)
-        db_config = parse_db_config()
-        host = db_config.get('db_host')
-
+        host = config.get('POSTGRES_HOST', 'db')
         if port != None and password != None:
             try:
                 conn = psycopg2.connect(database=db_name, host=host, user="cprvalidation", password=password,
                                     port=port)
             except Exception as e:
-                log.warn(e)
-                sys.exit()
+                log.warning(e)
+                abort(500, description="Database connect error")
         else:
-            log.warn("Config not setup properly! Missing either postgres_port or cprvalidation_password")
-            sys.exit()
+            log.warning("Config not setup properly! Missing either postgres_port or cprvalidation_password")
+            abort(500, description="Improper config setup")
+            
 
         select = """COPY (SELECT * FROM {0}.status) to STDOUT WITH CSV HEADER"""
         cur = conn.cursor()
 
         #Instead of using an actual file, we use a file-like string buffer
-        text_stream = StringIO.StringIO()
+        text_stream = StringIO()
 
         cur.copy_expert(select.format(db_name),text_stream)
         output = text_stream.getvalue()
@@ -46,6 +41,8 @@ class CprExportController(AdminController):
         conn.commit()
         conn.close()
 
-        pylons.response.headers['Content-Type'] = 'text/csv;charset=utf-8'
-        pylons.response.headers['Content-Disposition'] = 'attachment; filename="cpr_report.csv"'
-        return output
+        response = Response(output, mimetype='text/csv;charset=utf-8')
+        response.headers['Content-Disposition'] = 'attachment; filename="cpr_report.csv"'
+        return response
+
+cpr.add_url_rule('/download/cprreport', methods=["GET"], view_func=download)

@@ -1,10 +1,10 @@
-import ckan.plugins as plugins
-import ckan.plugins.toolkit as toolkit
-import ckan.lib.helpers as h
+import ckan.plugins as p
+import ckan.plugins.toolkit as tk
 from ckan.plugins.toolkit import Invalid
 from logging import getLogger
 from ckan.logic import get_action
-
+from ckanext.cprvalidation.views import cpr
+from ckanext.cprvalidation.validation import initdb, scan, addexception
 
 log = getLogger(__name__)
 
@@ -34,24 +34,24 @@ def validate_package(context,pkg_dict):
     try:
         #This will not trigger the next after_update
         get_action('package_update')(context, dataset)
-        log.warn("Changed status of dataset: " + str(dataset['id'] + " to " + str(dataset['verified'])))
+        log.warning("Changed status of dataset: " + str(dataset['id'] + " to " + str(dataset['verified'])))
 
     except Exception as e:
         log.exception(e)
-        log.warn("Something went wrong with the Validation update")
+        log.warning("Something went wrong with the Validation update")
 
 
-class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
-    plugins.implements(plugins.IConfigurer)
-    plugins.implements(plugins.ITemplateHelpers)
-    plugins.implements(plugins.IDatasetForm)
-    plugins.implements(plugins.IRoutes, inherit=True)
+class CprvalidationPlugin(tk.DefaultDatasetForm, p.SingletonPlugin):
+    p.implements(p.IConfigurer)
+    p.implements(p.IDatasetForm)
+    p.implements(p.IBlueprint)
+    p.implements(p.IClick)
 
     # IConfigurer
     def update_config(self, config_):
-        toolkit.add_template_directory(config_, 'templates')
-        toolkit.add_public_directory(config_, 'public')
-        toolkit.add_resource('fanstatic', 'cprvalidation')
+        tk.add_template_directory(config_, 'templates')
+        tk.add_public_directory(config_, 'public')
+        tk.add_resource('fanstatic', 'cprvalidation')
 
     # IDatasetForm - expanded schema
     def create_package_schema(self):
@@ -59,8 +59,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).create_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_validator('ignore_missing'),
-                         toolkit.get_converter('convert_to_extras')],
+            'verified': [tk.get_validator('ignore_missing'),
+                        verified_validator,
+                         tk.get_converter('convert_to_extras')],
         })
         return schema
 
@@ -69,8 +70,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).update_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_validator('ignore_missing'),
-                         toolkit.get_converter('convert_to_extras')],
+            'verified': [tk.get_validator('ignore_missing'),
+                         verified_validator,
+                         tk.get_converter('convert_to_extras')],
         })
         return schema
 
@@ -79,8 +81,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
         schema = super(CprvalidationPlugin, self).show_package_schema()
 
         schema.update({
-            'verified': [toolkit.get_converter('convert_from_extras'),
-                         toolkit.get_validator('ignore_missing')],
+            'verified': [tk.get_converter('convert_from_extras'),
+                        verified_validator,
+                         tk.get_validator('ignore_missing')],
         })
         return schema
 
@@ -90,11 +93,9 @@ class CprvalidationPlugin(plugins.SingletonPlugin, toolkit.DefaultDatasetForm):
     def package_types(self):
         return []
 
-    def get_helpers(self):
-        return []
-
-    '''IRoutes Adds download button to the admin page'''
-    def before_map(self,map):
-        cpr_ctrl = 'ckanext.cprvalidation.cpr:CprExportController'
-        map.connect('download cpr report','/download/cprreport',controller=cpr_ctrl,action='download')
-        return map
+    def get_blueprint(self):
+        return [cpr]
+    
+    def get_commands(self):
+        return [initdb, scan, addexception]
+    

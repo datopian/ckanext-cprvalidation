@@ -61,10 +61,10 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/technical.html#install-requires-vs-requirements-files
     install_requires=[
-        'xlrd',
-        'pandas==0.20.3',
-        'python-docx',
-        'pdfminer==20131113'
+	    'pdfminer',
+	    'xlrd',
+      'pandas',
+      'python-docx',
     ],
 
     # If there are data files included in your packages that need to be
